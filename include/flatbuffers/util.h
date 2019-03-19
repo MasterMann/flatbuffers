@@ -17,59 +17,37 @@
 #ifndef FLATBUFFERS_UTIL_H_
 #define FLATBUFFERS_UTIL_H_
 
-// clang-format off
+#include "flatbuffers/base.h"
+
+#include <errno.h>
 
 #ifndef FLATBUFFERS_PREFER_PRINTF
 #  include <sstream>
-#else // FLATBUFFERS_PREFER_PRINTF
+#else  // FLATBUFFERS_PREFER_PRINTF
 #  include <float.h>
 #  include <stdio.h>
-#endif // FLATBUFFERS_PREFER_PRINTF
-
-#ifdef _WIN32
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  ifndef NOMINMAX
-#    define NOMINMAX
-#  endif
-#  include <windows.h>  // Must be included before <direct.h>
-#  include <direct.h>
-#  include <winbase.h>
-#  undef interface  // This is also important because of reasons
-#else
-#  include <limits.h>
-#endif
-// clang-format on
-
-#include <errno.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#endif  // FLATBUFFERS_PREFER_PRINTF
 
 #include <iomanip>
-#include <fstream>
-
-#include "flatbuffers/base.h"
+#include <string>
 
 namespace flatbuffers {
 
 // @locale-independent functions for ASCII characters set.
 
-// Check that integer scalar is in closed range: (a <= x <= b)
+// Fast checking that character lies in closed range: [a <= x <= b]
 // using one compare (conditional branch) operator.
-template<typename T> inline bool check_in_range(T x, T a, T b) {
+inline bool check_ascii_range(char x, char a, char b) {
+  FLATBUFFERS_ASSERT(a <= b);
   // (Hacker's Delight): `a <= x <= b` <=> `(x-a) <={u} (b-a)`.
-  FLATBUFFERS_ASSERT(a <= b);  // static_assert only if 'a' & 'b' templated
-  typedef typename flatbuffers::make_unsigned<T>::type U;
-  return (static_cast<U>(x - a) <= static_cast<U>(b - a));
+  // The x, a, b will be promoted to int and subtracted without overflow.
+  return static_cast<unsigned int>(x - a) <= static_cast<unsigned int>(b - a);
 }
 
 // Case-insensitive isalpha
 inline bool is_alpha(char c) {
   // ASCII only: alpha to upper case => reset bit 0x20 (~0x20 = 0xDF).
-  return check_in_range(c & 0xDF, 'a' & 0xDF, 'z' & 0xDF);
+  return check_ascii_range(c & 0xDF, 'a' & 0xDF, 'z' & 0xDF);
 }
 
 // Check (case-insensitive) that `c` is equal to alpha.
@@ -84,11 +62,11 @@ inline bool is_alpha_char(char c, char alpha) {
 // functions that are not affected by the currently installed C locale. although
 // some implementations (e.g. Microsoft in 1252 codepage) may classify
 // additional single-byte characters as digits.
-inline bool is_digit(char c) { return check_in_range(c, '0', '9'); }
+inline bool is_digit(char c) { return check_ascii_range(c, '0', '9'); }
 
 inline bool is_xdigit(char c) {
   // Replace by look-up table.
-  return is_digit(c) | check_in_range(c & 0xDF, 'a' & 0xDF, 'f' & 0xDF);
+  return is_digit(c) || check_ascii_range(c & 0xDF, 'a' & 0xDF, 'f' & 0xDF);
 }
 
 // Case-insensitive isalnum
@@ -150,6 +128,9 @@ template<> inline std::string NumToString<signed char>(signed char t) {
   return NumToString(static_cast<int>(t));
 }
 template<> inline std::string NumToString<unsigned char>(unsigned char t) {
+  return NumToString(static_cast<int>(t));
+}
+template<> inline std::string NumToString<char>(char t) {
   return NumToString(static_cast<int>(t));
 }
 #if defined(FLATBUFFERS_CPP98_STL)
@@ -294,7 +275,7 @@ inline void strtoval_impl(float *val, const char *str, char **endptr) {
 //
 // Return value (like strtoull and strtoll, but reject partial result):
 // - If successful, an integer value corresponding to the str is returned.
-// - If full string conversion can't be performed, ​0​ is returned.
+// - If full string conversion can't be performed, 0 is returned.
 // - If the converted value falls out of range of corresponding return type, a
 // range error occurs. In this case value MAX(T)/MIN(T) is returned.
 template<typename T>
@@ -338,7 +319,7 @@ inline bool StringToFloatImpl(T *val, const char *const str) {
 // Convert a string to an instance of T.
 // Return value (matched with StringToInteger64Impl and strtod):
 // - If successful, a numeric value corresponding to the str is returned.
-// - If full string conversion can't be performed, ​0​ is returned.
+// - If full string conversion can't be performed, 0 is returned.
 // - If the converted value falls out of range of corresponding return type, a
 // range error occurs. In this case value MAX(T)/MIN(T) is returned.
 template<typename T> inline bool StringToNumber(const char *s, T *val) {
@@ -435,13 +416,7 @@ bool LoadFile(const char *name, bool binary, std::string *buf);
 // If "binary" is false data is written using ifstream's
 // text mode, otherwise data is written with no
 // transcoding.
-inline bool SaveFile(const char *name, const char *buf, size_t len,
-                     bool binary) {
-  std::ofstream ofs(name, binary ? std::ofstream::binary : std::ofstream::out);
-  if (!ofs.is_open()) return false;
-  ofs.write(buf, len);
-  return !ofs.bad();
-}
+bool SaveFile(const char *name, const char *buf, size_t len, bool binary);
 
 // Save data "buf" into file "name" returning true if
 // successful, false otherwise.  If "binary" is false
@@ -457,102 +432,35 @@ inline bool SaveFile(const char *name, const std::string &buf, bool binary) {
 // Windows ('/' or '\\') separators are used.
 
 // Any new separators inserted are always posix.
-
-// We internally store paths in posix format ('/'). Paths supplied
-// by the user should go through PosixPath to ensure correct behavior
-// on Windows when paths are string-compared.
-
-static const char kPathSeparator = '/';
-static const char kPathSeparatorWindows = '\\';
-static const char *PathSeparatorSet = "\\/";  // Intentionally no ':'
+FLATBUFFERS_CONSTEXPR char kPathSeparator = '/';
 
 // Returns the path with the extension, if any, removed.
-inline std::string StripExtension(const std::string &filepath) {
-  size_t i = filepath.find_last_of(".");
-  return i != std::string::npos ? filepath.substr(0, i) : filepath;
-}
+std::string StripExtension(const std::string &filepath);
 
 // Returns the extension, if any.
-inline std::string GetExtension(const std::string &filepath) {
-  size_t i = filepath.find_last_of(".");
-  return i != std::string::npos ? filepath.substr(i + 1) : "";
-}
+std::string GetExtension(const std::string &filepath);
 
 // Return the last component of the path, after the last separator.
-inline std::string StripPath(const std::string &filepath) {
-  size_t i = filepath.find_last_of(PathSeparatorSet);
-  return i != std::string::npos ? filepath.substr(i + 1) : filepath;
-}
+std::string StripPath(const std::string &filepath);
 
 // Strip the last component of the path + separator.
-inline std::string StripFileName(const std::string &filepath) {
-  size_t i = filepath.find_last_of(PathSeparatorSet);
-  return i != std::string::npos ? filepath.substr(0, i) : "";
-}
+std::string StripFileName(const std::string &filepath);
 
 // Concatenates a path with a filename, regardless of wether the path
 // ends in a separator or not.
-inline std::string ConCatPathFileName(const std::string &path,
-                                      const std::string &filename) {
-  std::string filepath = path;
-  if (filepath.length()) {
-    char &filepath_last_character = string_back(filepath);
-    if (filepath_last_character == kPathSeparatorWindows) {
-      filepath_last_character = kPathSeparator;
-    } else if (filepath_last_character != kPathSeparator) {
-      filepath += kPathSeparator;
-    }
-  }
-  filepath += filename;
-  // Ignore './' at the start of filepath.
-  if (filepath[0] == '.' && filepath[1] == kPathSeparator) {
-    filepath.erase(0, 2);
-  }
-  return filepath;
-}
+std::string ConCatPathFileName(const std::string &path,
+                               const std::string &filename);
 
 // Replaces any '\\' separators with '/'
-inline std::string PosixPath(const char *path) {
-  std::string p = path;
-  std::replace(p.begin(), p.end(), '\\', '/');
-  return p;
-}
+std::string PosixPath(const char *path);
 
 // This function ensure a directory exists, by recursively
 // creating dirs for any parts of the path that don't exist yet.
-inline void EnsureDirExists(const std::string &filepath) {
-  auto parent = StripFileName(filepath);
-  if (parent.length()) EnsureDirExists(parent);
-    // clang-format off
-
-  #ifdef _WIN32
-    (void)_mkdir(filepath.c_str());
-  #else
-    mkdir(filepath.c_str(), S_IRWXU|S_IRGRP|S_IXGRP);
-  #endif
-  // clang-format on
-}
+void EnsureDirExists(const std::string &filepath);
 
 // Obtains the absolute path from any other path.
 // Returns the input path if the absolute path couldn't be resolved.
-inline std::string AbsolutePath(const std::string &filepath) {
-  // clang-format off
-
-  #ifdef FLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION
-    return filepath;
-  #else
-    #ifdef _WIN32
-      char abs_path[MAX_PATH];
-      return GetFullPathNameA(filepath.c_str(), MAX_PATH, abs_path, nullptr)
-    #else
-      char abs_path[PATH_MAX];
-      return realpath(filepath.c_str(), abs_path)
-    #endif
-      ? abs_path
-      : filepath;
-  #endif // FLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION
-  // clang-format on
-}
+std::string AbsolutePath(const std::string &filepath);
 
 // To and from UTF-8 unicode conversion functions
 
