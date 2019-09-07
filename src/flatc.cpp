@@ -18,9 +18,9 @@
 
 #include <list>
 
-#define FLATC_VERSION "1.10.0"
-
 namespace flatbuffers {
+
+const char *FLATC_VERSION() { return FLATBUFFERS_VERSION(); }
 
 void FlatCompiler::ParseFile(
     flatbuffers::Parser &parser, const std::string &filename,
@@ -30,8 +30,10 @@ void FlatCompiler::ParseFile(
   include_directories.push_back(local_include_directory.c_str());
   include_directories.push_back(nullptr);
   if (!parser.Parse(contents.c_str(), &include_directories[0],
-                    filename.c_str()))
+                    filename.c_str())) {
     Error(parser.error_, false, false);
+  }
+  if (!parser.error_.empty()) { Warn(parser.error_, false); }
   include_directories.pop_back();
   include_directories.pop_back();
 }
@@ -105,6 +107,7 @@ std::string FlatCompiler::GetUsageString(const char *program_name) const {
     "                     If the language uses a single file for output (by default\n"
     "                     the case for C++ and JS), all code will end up in this one\n"
     "                     file.\n"
+    "  --cpp-include      Adds an #include in generated file.\n"
     "  --cpp-ptr-type T   Set object API pointer type (default std::unique_ptr).\n"
     "  --cpp-str-type T   Set object API string type (default std::string).\n"
     "                     T::c_str(), T::length() and T::empty() must be supported.\n"
@@ -245,6 +248,9 @@ int FlatCompiler::Compile(int argc, const char **argv) {
         opts.generate_object_based_api = true;
       } else if (arg == "--gen-compare") {
         opts.gen_compare = true;
+      } else if (arg == "--cpp-include") {
+        if (++argi >= argc) Error("missing include following" + arg, true);
+        opts.cpp_includes.push_back(argv[argi]);
       } else if (arg == "--cpp-ptr-type") {
         if (++argi >= argc) Error("missing type following" + arg, true);
         opts.cpp_object_api_pointer_type = argv[argi];
@@ -288,7 +294,7 @@ int FlatCompiler::Compile(int argc, const char **argv) {
       } else if (arg == "-M") {
         print_make_rules = true;
       } else if (arg == "--version") {
-        printf("flatc version %s\n", FLATC_VERSION);
+        printf("flatc version %s\n", FLATC_VERSION());
         exit(0);
       } else if (arg == "--grpc") {
         grpc_enabled = true;
@@ -313,6 +319,8 @@ int FlatCompiler::Compile(int argc, const char **argv) {
         opts.force_defaults = true;
       } else if (arg == "--force-empty") {
         opts.set_empty_to_null = false;
+      } else if (arg == "--java-primitive-has-method") {
+        opts.java_primitive_has_method = true;
       } else {
         for (size_t i = 0; i < params_.num_generators; ++i) {
           if (arg == params_.generators[i].generator_opt_long ||

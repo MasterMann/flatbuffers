@@ -7,10 +7,11 @@ import com.google.flatbuffers.*;
 
 @SuppressWarnings("unused")
 public final class Movie extends Table {
+  public static void ValidateVersion() { Constants.FLATBUFFERS_1_11_1(); }
   public static Movie getRootAsMovie(ByteBuffer _bb) { return getRootAsMovie(_bb, new Movie()); }
   public static Movie getRootAsMovie(ByteBuffer _bb, Movie obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
   public static boolean MovieBufferHasIdentifier(ByteBuffer _bb) { return __has_identifier(_bb, "MOVI"); }
-  public void __init(int _i, ByteBuffer _bb) { bb_pos = _i; bb = _bb; vtable_start = bb_pos - bb.getInt(bb_pos); vtable_size = bb.getShort(vtable_start); }
+  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
   public Movie __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
 
   public byte mainCharacterType() { int o = __offset(4); return o != 0 ? bb.get(o + bb_pos) : 0; }
@@ -29,7 +30,7 @@ public final class Movie extends Table {
       int main_characterOffset,
       int characters_typeOffset,
       int charactersOffset) {
-    builder.startObject(4);
+    builder.startTable(4);
     Movie.addCharacters(builder, charactersOffset);
     Movie.addCharactersType(builder, characters_typeOffset);
     Movie.addMainCharacter(builder, main_characterOffset);
@@ -37,7 +38,7 @@ public final class Movie extends Table {
     return Movie.endMovie(builder);
   }
 
-  public static void startMovie(FlatBufferBuilder builder) { builder.startObject(4); }
+  public static void startMovie(FlatBufferBuilder builder) { builder.startTable(4); }
   public static void addMainCharacterType(FlatBufferBuilder builder, byte mainCharacterType) { builder.addByte(0, mainCharacterType, 0); }
   public static void addMainCharacter(FlatBufferBuilder builder, int mainCharacterOffset) { builder.addOffset(1, mainCharacterOffset, 0); }
   public static void addCharactersType(FlatBufferBuilder builder, int charactersTypeOffset) { builder.addOffset(2, charactersTypeOffset, 0); }
@@ -47,7 +48,7 @@ public final class Movie extends Table {
   public static int createCharactersVector(FlatBufferBuilder builder, int[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addOffset(data[i]); return builder.endVector(); }
   public static void startCharactersVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
   public static int endMovie(FlatBufferBuilder builder) {
-    int o = builder.endObject();
+    int o = builder.endTable();
     return o;
   }
   public static void finishMovieBuffer(FlatBufferBuilder builder, int offset) { builder.finish(offset, "MOVI"); }

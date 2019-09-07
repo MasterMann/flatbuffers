@@ -72,7 +72,6 @@ public class FlatBufferBuilder {
         if (initial_size <= 0) {
           initial_size = 1;
         }
-        space = initial_size;
         this.bb_factory = bb_factory;
         if (existing_bb != null) {
           bb = existing_bb;
@@ -82,6 +81,7 @@ public class FlatBufferBuilder {
           bb = bb_factory.newByteBuffer(initial_size);
         }
         this.utf8 = utf8;
+        space = bb.capacity();
     }
 
    /**
@@ -198,6 +198,17 @@ public class FlatBufferBuilder {
             return ByteBuffer.allocate(capacity).order(ByteOrder.LITTLE_ENDIAN);
         }
     }
+
+   /**
+   * Helper function to test if a field is present in the table
+   *
+   * @param table Flatbuffer table
+   * @param offset virtual table offset
+   * @return true if the filed is present
+   */
+   public static boolean isFieldPresent(Table table, int offset) {
+     return table.__offset(offset) != 0;
+   }
 
     /**
      * Reset the FlatBufferBuilder by purging all data that it holds.
@@ -632,7 +643,7 @@ public class FlatBufferBuilder {
     *
     * @param numfields The number of fields found in this object.
     */
-    public void startObject(int numfields) {
+    public void startTable(int numfields) {
         notNested();
         if (vtable == null || vtable.length < numfields) vtable = new int[numfields];
         vtable_in_use = numfields;
@@ -757,11 +768,11 @@ public class FlatBufferBuilder {
     * Finish off writing the object that is under construction.
     *
     * @return The offset to the object inside {@link #dataBuffer()}.
-    * @see #startObject(int)
+    * @see #startTable(int)
     */
-    public int endObject() {
+    public int endTable() {
         if (vtable == null || !nested)
-            throw new AssertionError("FlatBuffers: endObject called without startObject");
+            throw new AssertionError("FlatBuffers: endTable called without startTable");
         addInt(0);
         int vtableloc = offset();
         // Write out the current vtable.
